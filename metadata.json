@@ -1,0 +1,5 @@
+{
+  "name": "Pac-Sec: Secure Key Generator",
+  "description": "A high-end, professionally designed secure key generator with a retro Pac-Man aesthetic. Generates Passwords, JWT Secrets, and API Keys entirely client-side for maximum security.",
+  "requestFramePermissions": []
+}
