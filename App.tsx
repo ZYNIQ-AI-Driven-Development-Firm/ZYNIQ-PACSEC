@@ -1,9 +1,19 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Loader } from './components/Loader';
 import { PacThinking } from './components/PacThinking';
-import { SecretCard } from './components/SecretCard';
+import { ChatMessage } from './components/ChatMessage';
 import { processUserRequest } from './services/geminiService';
-import { Message } from './types';
+import { Message, PromptItem } from './types';
+
+// Helper component for the 'C' replacement (Pacman Icon)
+const PacChar = ({ className }: { className?: string }) => (
+  <span className={`inline-block relative align-baseline ${className}`} style={{ width: '0.85em', height: '0.85em', verticalAlign: '-0.1em' }}>
+    <svg viewBox="0 0 100 100" className="w-full h-full fill-current overflow-visible">
+      {/* Center 50,50. Radius 50. Mouth approx 60 degrees open. */}
+      <path d="M50 50 L95 25 A50 50 0 1 0 95 75 Z" />
+    </svg>
+  </span>
+);
 
 export const App: React.FC = () => {
   const [loadingApp, setLoadingApp] = useState(true);
@@ -11,7 +21,11 @@ export const App: React.FC = () => {
   const [inputValue, setInputValue] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
-  const [showMenu, setShowMenu] = useState(false);
+  
+  // Zero Knowledge Note settings
+  const ttlOptions = [30000, 60000, 300000, 3600000]; // 30s, 1m, 5m, 1h
+  const [selectedTTL, setSelectedTTL] = useState(60000);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -22,15 +36,26 @@ export const App: React.FC = () => {
     scrollToBottom();
   }, [messages, isProcessing]);
 
+  const removeMessage = (id: string) => {
+    setMessages(prev => prev.filter(m => m.id !== id));
+  };
+
   const handleSendMessage = async (text: string) => {
     if (!text.trim()) return;
 
     setHasStarted(true);
     setInputValue('');
-    setShowMenu(false);
     
+    const expiry = Date.now() + selectedTTL;
+
     // Add User Message
-    const userMsg: Message = { id: Date.now().toString(), role: 'user', text };
+    const userMsg: Message = { 
+        id: Date.now().toString(), 
+        role: 'user', 
+        text,
+        expiresAt: expiry,
+        originalTTL: selectedTTL
+    };
     setMessages(prev => [...prev, userMsg]);
     setIsProcessing(true);
 
@@ -39,72 +64,172 @@ export const App: React.FC = () => {
 
     setIsProcessing(false);
     
+    // Assistant inherits the same TTL context
+    const botExpiry = Date.now() + selectedTTL;
+    
     const botMsg: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
         text: response.text,
         toolCall: response.toolCall,
-        isError: response.isError
+        isError: response.isError,
+        expiresAt: botExpiry,
+        originalTTL: selectedTTL
     };
     
     setMessages(prev => [...prev, botMsg]);
   };
 
-  const handleSuggestion = (text: string) => {
-      handleSendMessage(text);
+  const cycleTTL = () => {
+    const currentIndex = ttlOptions.indexOf(selectedTTL);
+    const nextIndex = (currentIndex + 1) % ttlOptions.length;
+    setSelectedTTL(ttlOptions[nextIndex]);
+  };
+
+  const formatTTL = (ms: number) => {
+      if (ms < 60000) return `${(ms/1000).toString().padStart(2,'0')}s`;
+      if (ms < 3600000) return `${(ms/60000).toString().padStart(2,'0')}m`;
+      return `${(ms/3600000).toString().padStart(2,'0')}h`;
+  };
+
+  // --- MENU DATA STRUCTURE ---
+  const menuData: PromptItem[] = [
+      {
+          id: 'cat_access',
+          label: 'ACCESS CONTROL',
+          cmd: 'OPEN_ACCESS_MENU',
+          desc: 'PASSWORDS, PINS, PHRASES',
+          type: 'category',
+          items: [
+              { id: 'cmd_pass_strong', label: 'STRONG PASSWORD', cmd: 'Generate a strong secure password 24 chars', desc: 'MAX ENTROPY', type: 'command' },
+              { id: 'cmd_pass_mem', label: 'MEMORABLE PASS', cmd: 'Generate a memorable but secure password', desc: 'HUMAN READABLE', type: 'command' },
+              { id: 'cmd_pin', label: 'SECURE PIN', cmd: 'Generate a 6-digit secure PIN', desc: 'NUMERIC ONLY', type: 'command' }
+          ]
+      },
+      {
+          id: 'cat_dev',
+          label: 'DEVELOPER TOOLS',
+          cmd: 'OPEN_DEV_MENU',
+          desc: 'API KEYS, JWT, TOKENS',
+          type: 'category',
+          items: [
+              { id: 'cmd_jwt', label: 'JWT SECRET', cmd: 'Generate a 256-bit JWT signing secret', desc: 'HMAC-SHA256', type: 'command' },
+              { id: 'cmd_api', label: 'API KEY', cmd: 'Generate a standard API Key 32 chars', desc: 'SERVICE AUTH', type: 'command' },
+              { id: 'cmd_uuid', label: 'UUID V4', cmd: 'Generate a UUID v4', desc: 'UNIQUE ID', type: 'command' }
+          ]
+      },
+      {
+          id: 'cat_crypto',
+          label: 'CRYPTO & HEX',
+          cmd: 'OPEN_CRYPTO_MENU',
+          desc: 'RAW BYTES, KEYS',
+          type: 'category',
+          items: [
+              { id: 'cmd_hex_128', label: '128-BIT HEX', cmd: 'Generate 128-bit hex string', desc: 'RAW HEX', type: 'command' },
+              { id: 'cmd_b64_256', label: '256-BIT BASE64', cmd: 'Generate 256-bit base64 string', desc: 'ENCODED BYTES', type: 'command' },
+              { id: 'cmd_rsa_sim', label: 'ENCRYPTION KEY', cmd: 'Generate an encryption key 256 bit', desc: 'AES PRE-SHARED', type: 'command' }
+          ]
+      },
+      {
+          id: 'cat_bundles',
+          label: 'LOOT CRATES',
+          cmd: 'OPEN_BUNDLES_MENU',
+          desc: 'FULL STACK BUNDLES',
+          type: 'category',
+          items: [
+              { id: 'cmd_bundle_oauth', label: 'OAUTH STACK', cmd: 'Generate OAuth Stack', desc: 'CLIENT ID + SECRET', type: 'command' },
+              { id: 'cmd_bundle_app', label: 'WEB APP START', cmd: 'Generate Web App Starter Keys', desc: 'DB + JWT + API', type: 'command' }
+          ]
+      }
+  ];
+
+  const handlePromptInteraction = (item: PromptItem) => {
+      if (item.type === 'category') {
+          // Drill down into category
+          const promptMsg: Message = {
+              id: Date.now().toString(),
+              role: 'assistant',
+              text: `CATEGORY_SELECTED: ${item.label}`,
+              prompts: item.items, // Show children
+              expiresAt: Date.now() + selectedTTL,
+              originalTTL: selectedTTL
+          };
+          setMessages(prev => [...prev, promptMsg]);
+      } else {
+          // Execute command
+          handleSendMessage(item.cmd);
+      }
+  };
+
+  const handleShowMainMenu = () => {
+      setHasStarted(true);
+      const promptMsg: Message = {
+          id: Date.now().toString(),
+          role: 'assistant',
+          text: 'SELECT_OPERATION_MODE:',
+          prompts: menuData, // Show top level categories
+          expiresAt: Date.now() + selectedTTL,
+          originalTTL: selectedTTL
+      };
+      setMessages(prev => [...prev, promptMsg]);
   };
 
   if (loadingApp) {
     return <Loader onComplete={() => setLoadingApp(false)} />;
   }
 
-  const suggestions = [
-      { label: 'Generate strong password', icon: '🔒', desc: 'Secure random password' },
-      { label: 'Create JWT secret', icon: '🔑', desc: '256-bit or 512-bit signing keys' },
-      { label: 'Generate API Key', icon: '🎟️', desc: 'Base64 or Hex API credentials' },
-      { label: 'New UUID v4', icon: '🆔', desc: 'Unique identifier' }
-  ];
-
   return (
-    <div className="min-h-screen bg-pac-black text-white selection:bg-pac-ghostPink selection:text-black font-sans flex flex-col relative overflow-hidden">
+    <div className="min-h-screen bg-pac-black text-white font-sans flex flex-col relative overflow-hidden">
       
-      {/* Background Ambience */}
-      {!hasStarted && (
-          <div className="absolute inset-0 pointer-events-none overflow-hidden">
-              <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-pac-blue/20 rounded-full blur-[100px] animate-pulse"></div>
-              <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-pac-yellow/5 rounded-full blur-[80px]"></div>
-          </div>
-      )}
+      {/* Arcade Grid Background */}
+      <div className="absolute inset-0 pointer-events-none opacity-20" 
+           style={{ 
+             backgroundImage: 'linear-gradient(#1e293b 1px, transparent 1px), linear-gradient(90deg, #1e293b 1px, transparent 1px)', 
+             backgroundSize: '40px 40px' 
+           }}>
+      </div>
 
       {/* Header (Only visible when chat starts) */}
-      <header className={`fixed top-0 left-0 right-0 p-6 z-40 transition-all duration-500 ${hasStarted ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-full'}`}>
-        <div className="flex items-center gap-3">
-             <div className="w-8 h-8 rounded-full bg-pac-yellow flex items-center justify-center">
-                 <div className="w-0 h-0 border-t-[6px] border-t-transparent border-l-[10px] border-l-black border-b-[6px] border-b-transparent ml-1"></div>
+      <header className={`fixed top-0 left-0 right-0 p-4 z-40 transition-all duration-500 bg-black/90 border-b-4 border-pac-blue ${hasStarted ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-full'}`}>
+        <div className="max-w-4xl mx-auto flex items-center justify-between">
+             <div className="flex items-center gap-4">
+                 <div className="flex flex-col">
+                    <span className="text-pac-ghostRed font-arcade text-[10px] animate-pulse">1UP</span>
+                    <span className="text-white font-arcade text-xs">00</span>
+                 </div>
+                 <div className="flex flex-col items-center">
+                    <span className="text-pac-yellow font-arcade text-[10px]">HIGH SCORE</span>
+                    <span className="text-white font-arcade text-xs">999999</span>
+                 </div>
              </div>
-             <h1 className="font-arcade text-pac-yellow text-lg tracking-wider">PAC-SEC</h1>
+             <h1 className="font-arcade text-pac-yellow text-sm tracking-widest border-2 border-pac-yellow px-2 py-1 shadow-[4px_4px_0_0_rgba(242,201,76,0.5)] flex items-center gap-[0.1em]">
+                PA<PacChar />-SE<PacChar />
+             </h1>
         </div>
       </header>
 
       {/* Main Content Area */}
-      <main className={`flex-1 w-full max-w-4xl mx-auto p-6 transition-all duration-500 flex flex-col relative z-10 ${!hasStarted ? 'justify-center items-center min-h-screen' : 'pt-24 pb-32'}`}>
+      <main className={`flex-1 w-full max-w-4xl mx-auto p-2 transition-all duration-500 flex flex-col relative z-10 ${!hasStarted ? 'justify-center items-center min-h-screen' : 'pt-28 pb-40'}`}>
         
         {/* Intro State */}
         {!hasStarted && (
-           <div className="text-center animate-fade-in mb-12 flex flex-col items-center">
-               <div className="inline-block relative mb-4">
-                   <div className="absolute -inset-4 bg-pac-yellow/20 rounded-full blur-xl animate-pulse"></div>
-                   <div className="relative text-6xl font-arcade text-pac-yellow drop-shadow-[0_0_10px_rgba(242,201,76,0.8)] leading-tight">
-                       SECURE<br/>GENERATOR
+           <div className="text-center animate-fade-in mb-6 flex flex-col items-center z-20 -translate-y-12">
+               
+               <div className="mb-4 border-4 border-pac-blue p-4 bg-black shadow-[8px_8px_0_0_#1e293b]">
+                   <div className="text-4xl md:text-6xl font-arcade text-pac-yellow mb-4 tracking-tighter drop-shadow-md flex items-center justify-center gap-[0.05em]">
+                       <span>PA</span>
+                       <PacChar className="mx-[0.02em]" />
+                       <span>SE</span>
+                       <PacChar className="mx-[0.02em]" />
+                   </div>
+                   <div className="text-pac-ghostRed text-xs font-arcade tracking-[0.2em] blink-effect mt-3">
+                       Infinite Secrets. Zero Nonsense.
                    </div>
                </div>
-
-               <div className="text-pac-ghostCyan text-sm font-arcade tracking-widest mb-8">
-                   NO SERVER STORAGE. 100% PRIVATE.
-               </div>
                
-               <p className="text-gray-400 max-w-md mx-auto text-lg leading-relaxed">
-                   High-entropy, client-side key generation powered by AI intent recognition.
+               <p className="text-pac-ghostCyan font-arcade text-[10px] max-w-md mx-auto leading-loose mt-2">
+                   NO SERVER STORAGE.<br/>
+                   100% CLIENT-SIDE ENCRYPTION.
                </p>
            </div>
         )}
@@ -113,40 +238,17 @@ export const App: React.FC = () => {
         {hasStarted && (
             <div className="space-y-8 w-full">
                 {messages.map((msg) => (
-                    <div key={msg.id} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-                        {/* Message Bubble */}
-                        {msg.text && (
-                            <div className={`max-w-[80%] px-6 py-4 rounded-2xl ${
-                                msg.role === 'user' 
-                                ? 'bg-pac-blue text-white rounded-br-none border border-white/10' 
-                                : msg.isError 
-                                    ? 'bg-red-950/50 text-red-500 border border-red-500/50 font-arcade text-xs leading-relaxed tracking-widest shadow-[0_0_15px_rgba(255,0,0,0.2)]'
-                                    : 'text-gray-300 font-medium'
-                            }`}>
-                                {msg.role === 'assistant' && !msg.isError && (
-                                    <div className="flex items-center gap-2 mb-2 text-xs font-arcade text-pac-ghostPink uppercase">
-                                        <span>System</span>
-                                    </div>
-                                )}
-                                {msg.role === 'assistant' && msg.isError && (
-                                    <div className="flex items-center gap-2 mb-2 text-xs font-arcade text-red-500 uppercase animate-pulse">
-                                        <span>⚠️ SYSTEM ERROR</span>
-                                    </div>
-                                )}
-                                {msg.text}
-                            </div>
-                        )}
-
-                        {/* Interactive Tool Card */}
-                        {msg.toolCall && (
-                            <SecretCard config={msg.toolCall} />
-                        )}
-                    </div>
+                   <ChatMessage 
+                        key={msg.id} 
+                        message={msg} 
+                        onExpire={removeMessage}
+                        onPromptInteract={handlePromptInteraction}
+                    />
                 ))}
                 
                 {/* Loading State */}
                 {isProcessing && (
-                    <div className="flex justify-start w-full">
+                    <div className="flex justify-start w-full pl-2">
                         <PacThinking />
                     </div>
                 )}
@@ -155,99 +257,121 @@ export const App: React.FC = () => {
         )}
       </main>
 
-      {/* Input Area (Centered initially, Sticky Bottom after start) */}
+      {/* Input Area */}
       <div className={`
-        transition-all duration-700 ease-in-out w-full z-50
-        ${!hasStarted ? 'fixed top-1/2 left-1/2 -translate-x-1/2 translate-y-32 max-w-2xl px-6' : 'fixed bottom-0 left-0 right-0 bg-pac-black/80 backdrop-blur-md border-t border-white/10 p-6'}
+        transition-all duration-700 ease-[cubic-bezier(0.25,1,0.5,1)] w-full z-50
+        ${!hasStarted 
+            ? 'fixed top-1/2 left-1/2 -translate-x-1/2 translate-y-24 max-w-xl px-4' 
+            : 'fixed bottom-0 left-0 right-0 bg-[#050505] border-t-4 border-pac-blue p-3 pb-6 md:pb-6 shadow-[0_-10px_30px_rgba(0,0,0,0.8)]'
+        }
       `}>
-          <div className={`mx-auto ${!hasStarted ? 'w-full' : 'max-w-4xl'}`}>
+          <div className={`mx-auto ${!hasStarted ? 'w-full' : 'max-w-4xl flex gap-3 items-stretch'}`}>
             
-            {/* Command Trigger */}
+            {/* Command Trigger (Left side when started, Inline Row when intro) */}
             {!isProcessing && (
-                <div className={`flex mb-4 ${!hasStarted ? 'justify-center' : 'justify-start'}`}>
+                <div className={`${!hasStarted ? 'flex items-center justify-center gap-4 mb-4' : 'flex-shrink-0'}`}>
                     <button
                         type="button"
-                        onClick={() => setShowMenu(true)}
+                        onClick={handleShowMainMenu}
                         className={`
-                            font-arcade text-xs px-6 py-3 rounded-lg border-2 transition-all duration-200 flex items-center gap-2
+                            group font-arcade text-[10px] border-2 transition-all duration-100 flex items-center justify-center gap-2 uppercase tracking-wider overflow-hidden
                             ${!hasStarted 
-                                ? 'bg-pac-yellow text-black border-pac-yellow hover:bg-white hover:border-white animate-pulse hover:animate-none shadow-[0_0_15px_rgba(242,201,76,0.5)]' 
-                                : 'bg-gray-900 text-pac-ghostCyan border-gray-700 hover:border-pac-ghostCyan'}
+                                ? 'px-6 py-2 bg-pac-yellow text-black border-white hover:translate-y-[2px] shadow-[4px_4px_0_0_white] hover:shadow-none active:translate-y-[4px] active:shadow-none' 
+                                : 'h-full px-3 bg-gray-900 text-pac-ghostCyan border-gray-700 hover:border-pac-ghostCyan hover:bg-gray-800'
+                            }
                         `}
+                        title="Open Command List"
                     >
-                        <span>{hasStarted ? 'COMMANDS' : 'PROMPTS MENU'}</span>
-                        {!hasStarted && <span className="ml-2">▶</span>}
+                         <span className={!hasStarted ? 'text-sm' : 'text-sm'}>{!hasStarted ? '🕹️' : '☰'}</span>
+                         {(!hasStarted || window.innerWidth > 640) && <span>{!hasStarted ? 'PROMPTS_LIST' : 'CMD'}</span>}
                     </button>
+                    {/* Helper text only on intro */}
+                    {!hasStarted && (
+                        <div className="font-arcade text-[10px] text-pac-ghostCyan animate-pulse whitespace-nowrap pt-1">
+                            OR TYPE_YOURS_
+                        </div>
+                    )}
                 </div>
             )}
 
-            {/* Input Box */}
-            <div className="relative group">
-                <div className={`absolute -inset-0.5 bg-gradient-to-r from-pac-yellow via-pac-ghostRed to-pac-ghostCyan rounded-full opacity-75 blur transition duration-1000 group-hover:duration-200 ${isProcessing ? 'animate-pulse' : ''}`}></div>
-                <div className="relative flex items-center bg-black rounded-full px-6 py-4">
-                    <input
-                        type="text"
-                        value={inputValue}
-                        onChange={(e) => setInputValue(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleSendMessage(inputValue)}
-                        placeholder={hasStarted ? "Message..." : "Type request manually or use menu..."}
-                        className="w-full bg-transparent border-none focus:ring-0 text-white placeholder-gray-500 font-medium"
-                        disabled={isProcessing}
-                        autoFocus
-                    />
-                    <button 
-                        onClick={() => handleSendMessage(inputValue)}
-                        disabled={!inputValue.trim() || isProcessing}
-                        className="ml-4 text-pac-yellow hover:text-white transition-colors disabled:opacity-50"
-                    >
-                        <svg className="w-6 h-6 transform rotate-90" fill="currentColor" viewBox="0 0 20 20"><path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" /></svg>
-                    </button>
-                </div>
+            {/* Main Input Container */}
+            <div className={`
+                flex-1 relative flex items-center bg-black border-4 transition-colors
+                ${isProcessing ? 'border-gray-800' : 'border-pac-blue focus-within:border-pac-yellow'}
+                ${!hasStarted ? 'p-2 shadow-[8px_8px_0_0_#1e293b]' : 'p-1'}
+            `}>
+                
+                {/* Timer Selector (Digital Clock Style) */}
+                <button 
+                    onClick={cycleTTL}
+                    className={`
+                        mr-2 font-arcade text-[10px] border-r-2 border-gray-800 px-3 py-2 transition-colors flex flex-col items-center justify-center leading-tight
+                        ${selectedTTL < 60000 ? 'text-red-500' : 'text-pac-yellow'}
+                        hover:bg-gray-900 group
+                    `}
+                    title="Self-Destruct Timer"
+                >
+                    <span className="text-[8px] text-gray-500 mb-0.5 group-hover:text-gray-300">TTL</span>
+                    <span>{formatTTL(selectedTTL)}</span>
+                </button>
+
+                {/* Blinking Prompt Char */}
+                <span className="font-arcade text-pac-yellow text-sm animate-pulse pl-1 md:pl-2 select-none">{'>'}</span>
+                
+                {/* Text Input */}
+                <input
+                    type="text"
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSendMessage(inputValue)}
+                    placeholder={hasStarted ? "ENTER COMMAND..." : "INITIATE SEQUENCE..."}
+                    className="flex-1 w-full bg-transparent border-none focus:ring-0 text-white placeholder-gray-700 font-mono text-sm md:text-base p-2 tracking-wide caret-pac-yellow"
+                    disabled={isProcessing}
+                    autoFocus
+                    spellCheck={false}
+                    autoComplete="off"
+                />
+
+                {/* Enter Button (Arcade Style) */}
+                <button 
+                    onClick={() => handleSendMessage(inputValue)}
+                    disabled={!inputValue.trim() || isProcessing}
+                    className={`
+                        ml-2 font-arcade text-[10px] px-4 py-2 border-l-2 border-gray-800 transition-all uppercase tracking-widest
+                        ${!inputValue.trim() || isProcessing 
+                            ? 'text-gray-600 cursor-not-allowed' 
+                            : 'bg-pac-blue text-white hover:bg-pac-yellow hover:text-black hover:font-bold'
+                        }
+                    `}
+                >
+                    {isProcessing ? '...' : 'ENTER'}
+                </button>
             </div>
           </div>
       </div>
 
-      {/* Command Menu Popup */}
-      {showMenu && (
-        <div 
-            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in" 
-            onClick={() => setShowMenu(false)}
-        >
-            <div 
-                className="bg-gray-900 border-2 border-pac-yellow p-1 rounded-xl max-w-md w-full shadow-[0_0_50px_rgba(242,201,76,0.15)] transform transition-all scale-100" 
-                onClick={e => e.stopPropagation()}
-            >
-                <div className="border border-pac-yellow/20 rounded-lg p-6 bg-black/50">
-                    <h2 className="font-arcade text-pac-yellow text-center mb-6 text-xl tracking-widest drop-shadow-md">SELECT MODULE</h2>
-                    <div className="grid grid-cols-1 gap-3">
-                        {suggestions.map(s => (
-                            <button 
-                                key={s.label} 
-                                onClick={() => handleSuggestion(s.label)}
-                                className="group flex items-center gap-4 p-4 rounded-lg bg-gray-800/50 hover:bg-pac-blue border border-transparent hover:border-pac-ghostCyan transition-all duration-200 text-left"
-                            >
-                                <span className="text-2xl group-hover:scale-110 transition-transform">{s.icon}</span>
-                                <div>
-                                    <div className="text-sm font-bold text-gray-200 group-hover:text-white font-sans">{s.label}</div>
-                                    <div className="text-xs text-gray-500 group-hover:text-pac-ghostCyan font-mono">{s.desc}</div>
-                                </div>
-                                <div className="ml-auto opacity-0 group-hover:opacity-100 text-pac-yellow">
-                                    ▶
-                                </div>
-                            </button>
-                        ))}
-                    </div>
-                    <button 
-                        onClick={() => setShowMenu(false)} 
-                        className="mt-6 w-full text-center text-gray-600 font-arcade text-[10px] hover:text-red-500 transition-colors tracking-widest"
-                    >
-                        [ CLOSE TERMINAL ]
-                    </button>
-                </div>
-            </div>
-        </div>
-      )}
+      {/* Footer Credit */}
+      <footer className="fixed bottom-2 w-full text-center z-[60] pointer-events-auto">
+         <a 
+            href="https://zyniq.solutions" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="group inline-block font-arcade text-[10px] transition-all duration-300 ease-out brightness-50 hover:brightness-125 hover:scale-110"
+         >
+            <span className="text-pac-yellow font-bold drop-shadow-sm group-hover:drop-shadow-[0_0_8px_rgba(242,201,76,0.8)] transition-all">PACSEC BY </span>
+            <span className="text-[#ea2323] font-bold drop-shadow-sm group-hover:drop-shadow-[0_0_8px_rgba(234,35,35,0.8)] transition-all">ZYNIQ</span>
+         </a>
+      </footer>
 
+      <style>{`
+        .blink-effect {
+          animation: blink 2s step-end infinite;
+        }
+        @keyframes blink {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0; }
+        }
+      `}</style>
     </div>
   );
-};
+}

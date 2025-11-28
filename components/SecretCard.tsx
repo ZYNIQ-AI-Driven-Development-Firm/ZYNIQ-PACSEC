@@ -54,190 +54,164 @@ export const SecretCard: React.FC<SecretCardProps> = ({ config }) => {
   };
 
   // Strength Calculation
-  const getStrength = useCallback(() => {
-    if (config.type !== 'password') return null;
-
+  const getStrengthPoints = useCallback(() => {
+    if (config.type !== 'password') return 0;
     let score = 0;
-    // Length points (Base is 8)
-    if (length >= 12) score++; // Good length
-    if (length >= 16) score++; // Secure length
-    if (length >= 24) score++; // Paranoid length
-
-    // Complexity points
+    if (length >= 12) score++;
+    if (length >= 16) score++;
+    if (length >= 24) score++;
     if (useUppercase) score++;
     if (useNumbers) score++;
     if (useSymbols) score++;
-
-    // Normalize to 4 levels
-    // Max score possible: 6
-    if (score < 3) return { label: 'WEAK', color: 'bg-pac-ghostRed', textColor: 'text-pac-ghostRed', width: '25%' };
-    if (score < 5) return { label: 'MODERATE', color: 'bg-pac-ghostOrange', textColor: 'text-pac-ghostOrange', width: '50%' };
-    if (score < 6) return { label: 'STRONG', color: 'bg-pac-ghostCyan', textColor: 'text-pac-ghostCyan', width: '75%' };
-    return { label: 'MAXIMUM', color: 'bg-pac-yellow', textColor: 'text-pac-yellow', width: '100%' };
+    return score; // Max 6
   }, [length, useUppercase, useNumbers, useSymbols, config.type]);
 
-  const strength = getStrength();
+  const points = getStrengthPoints();
 
   return (
-    <div className="w-full max-w-2xl bg-pac-blue/50 border border-pac-yellow/20 rounded-xl overflow-hidden backdrop-blur-sm shadow-[0_0_20px_rgba(242,201,76,0.1)] mt-4 animate-fade-in-up">
-      {/* Header */}
-      <div className="bg-black/40 p-4 border-b border-white/5 flex justify-between items-center">
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-pac-ghostRed"></div>
-          <span className="font-arcade text-xs text-pac-ghostCyan uppercase tracking-widest">{getTitle()} GENERATOR</span>
+    <div className="w-full max-w-1xl mt-4 animate-fade-in-up font-arcade">
+      {/* Arcade Bezel Container */}
+      <div className="bg-black border-4 border-pac-blue p-2 relative shadow-[8px_8px_0_0_rgba(30,41,59,0.5)]">
+        
+        {/* Header */}
+        <div className="bg-pac-blue text-white p-2 border-b-4 border-black flex justify-between items-center mb-4">
+          <div className="flex items-center gap-3">
+             <div className="animate-chomp text-pac-yellow text-xs">C</div>
+             <span className="text-white text-xs tracking-widest">{getTitle()}</span>
+          </div>
+          <button 
+            onClick={generate} 
+            className="text-[10px] bg-red-600 hover:bg-white hover:text-red-600 text-white px-3 py-1 border-2 border-black shadow-[2px_2px_0_0_black] active:shadow-none active:translate-y-[2px] transition-all uppercase tracking-wide"
+          >
+            REGEN
+          </button>
         </div>
-        <button onClick={generate} className="text-xs text-pac-yellow hover:text-white transition-colors font-sans flex items-center gap-1 group">
-          <svg className="w-4 h-4 group-hover:rotate-180 transition-transform duration-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-          REGENERATE
-        </button>
-      </div>
 
-      {/* Main Display */}
-      <div className="p-6">
-        <div className="relative group">
-            <div className="absolute -inset-1 bg-gradient-to-r from-pac-ghostPink to-pac-ghostCyan rounded-lg blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200"></div>
-            <div className="relative bg-black rounded-lg p-6 flex flex-col gap-4 border border-white/10">
-                <div className="flex items-center justify-between gap-4">
-                  <code className="font-mono text-lg break-all text-white selection:bg-pac-yellow selection:text-black">
+        {/* Main Display Area */}
+        <div className="p-2 flex flex-col gap-6">
+            
+            {/* The Secret */}
+            <div className="relative group">
+                <div className="bg-black border-4 border-pac-ghostPink p-4 flex items-center justify-between gap-4 shadow-[4px_4px_0_0_rgba(255,184,255,0.3)]">
+                  <code className="font-mono text-sm md:text-base break-all text-pac-ghostPink selection:bg-pac-yellow selection:text-black">
                       {secret}
                   </code>
                   <button 
                       onClick={copyToClipboard}
-                      className={`flex-shrink-0 p-3 rounded-md transition-all duration-200 ${copied ? 'bg-green-500 text-black' : 'bg-pac-yellow text-black hover:bg-white'}`}
+                      className={`flex-shrink-0 font-arcade text-[10px] px-3 py-2 border-2 transition-all ${copied ? 'bg-green-500 text-black border-green-500' : 'bg-transparent text-pac-yellow border-pac-yellow hover:bg-pac-yellow hover:text-black'}`}
+                      title="Copy"
                   >
-                      {copied ? (
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                      ) : (
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
-                      )}
+                      {copied ? 'OK!' : 'COPY'}
                   </button>
                 </div>
+            </div>
 
-                {/* Password Strength Meter */}
-                {config.type === 'password' && strength && (
-                  <div className="w-full">
-                    <div className="flex justify-between items-end mb-1">
-                       <span className="text-[10px] text-gray-500 font-arcade">STRENGTH</span>
-                       <span className={`text-[10px] font-arcade ${strength.textColor}`}>{strength.label}</span>
-                    </div>
-                    <div className="h-1.5 w-full bg-gray-800 rounded-full overflow-hidden">
-                       <div 
-                         className={`h-full ${strength.color} transition-all duration-500 ease-out`}
-                         style={{ width: strength.width }}
-                       ></div>
-                    </div>
-                  </div>
+            {/* Password Strength - Square Pixel Meter */}
+            {config.type === 'password' && (
+              <div className="flex items-center gap-4 border-b-2 border-dashed border-gray-800 pb-4">
+                 <span className="text-[10px] text-pac-blue uppercase w-20">POWER</span>
+                 <div className="flex gap-2">
+                    {[...Array(6)].map((_, i) => (
+                        <div 
+                            key={i}
+                            className={`w-3 h-3 ${i < points ? 'bg-pac-yellow' : 'bg-gray-800'} border border-black`}
+                        ></div>
+                    ))}
+                 </div>
+                 <span className="text-[10px] text-gray-500 ml-auto">
+                    {points < 3 ? 'WEAK' : points < 5 ? 'NORMAL' : 'MAX'}
+                 </span>
+              </div>
+            )}
+
+            {/* Controls Section */}
+            <div className="pt-2 space-y-6">
+                
+                {/* Password Specific Controls */}
+                {config.type === 'password' && (
+                    <>
+                        <div className="space-y-2">
+                            <div className="flex justify-between text-[10px] text-pac-ghostCyan mb-1">
+                                <span>LENGTH</span>
+                                <span>{length} PX</span>
+                            </div>
+                            <input 
+                                type="range" 
+                                min="8" 
+                                max="64" 
+                                value={length} 
+                                onChange={(e) => setLength(parseInt(e.target.value))}
+                                className="w-full h-4 bg-gray-900 appearance-none border-2 border-white cursor-pointer accent-pac-yellow"
+                            />
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <RetroToggle label="CAPS" active={useUppercase} onClick={() => setUseUppercase(!useUppercase)} />
+                            <RetroToggle label="NUMS" active={useNumbers} onClick={() => setUseNumbers(!useNumbers)} />
+                            <RetroToggle label="SYMS" active={useSymbols} onClick={() => setUseSymbols(!useSymbols)} />
+                        </div>
+                    </>
                 )}
+
+                {/* Key/JWT Controls */}
+                {(config.type === 'jwt' || config.type === 'apiKey') && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div>
+                             <label className="text-[10px] text-pac-ghostCyan block mb-3">BIT DEPTH</label>
+                             <div className="flex gap-2">
+                                {[128, 256, 512].map(b => (
+                                    <button 
+                                        key={b}
+                                        onClick={() => setBits(b)}
+                                        className={`flex-1 py-2 text-[10px] border-2 transition-all ${
+                                            bits === b 
+                                            ? 'bg-pac-yellow text-black border-pac-yellow shadow-[2px_2px_0_0_white]' 
+                                            : 'bg-transparent text-gray-500 border-gray-800 hover:border-gray-500'
+                                        }`}
+                                    >
+                                        {b}
+                                    </button>
+                                ))}
+                             </div>
+                        </div>
+                        <div>
+                             <label className="text-[10px] text-pac-ghostCyan block mb-3">FORMAT</label>
+                             <div className="flex gap-4 p-1 border-2 border-gray-800 bg-black">
+                                <RetroSwitchOption label="HEX" active={format === 'hex'} onClick={() => setFormat('hex')} />
+                                <RetroSwitchOption label="BASE64" active={format === 'base64'} onClick={() => setFormat('base64')} />
+                             </div>
+                        </div>
+                    </div>
+                )}
+                 
+                 {/* UUID Info */}
+                 {config.type === 'uuid' && (
+                     <div className="text-center text-[10px] text-gray-600 uppercase border-2 border-gray-800 p-2">
+                         RFC 4122 v4 COMPLIANT
+                     </div>
+                 )}
             </div>
         </div>
-      </div>
-
-      {/* Controls */}
-      <div className="bg-black/20 p-6 border-t border-white/5 space-y-6">
-        
-        {/* Password Controls */}
-        {config.type === 'password' && (
-          <>
-            <div>
-              <div className="flex justify-between mb-2">
-                <label className="text-sm text-gray-400 font-medium">Length</label>
-                <span className="text-pac-yellow font-mono">{length}</span>
-              </div>
-              <input 
-                type="range" 
-                min="8" 
-                max="64" 
-                value={length} 
-                onChange={(e) => setLength(parseInt(e.target.value))}
-                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-pac-yellow"
-              />
-            </div>
-            <div className="flex flex-wrap gap-4">
-               <Toggle label="A-Z" checked={useUppercase} onChange={setUseUppercase} />
-               <Toggle label="0-9" checked={useNumbers} onChange={setUseNumbers} />
-               <Toggle label="#$%" checked={useSymbols} onChange={setUseSymbols} />
-            </div>
-          </>
-        )}
-
-        {/* JWT/Key Controls */}
-        {(config.type === 'jwt' || config.type === 'apiKey') && (
-           <div className="flex flex-col gap-6">
-             {/* Bits Selector */}
-             <div>
-                <label className="text-xs text-gray-400 block mb-3 font-arcade">STRENGTH (BITS)</label>
-                <div className="flex gap-2">
-                  {[128, 256, 512].map(b => (
-                      <button 
-                          key={b}
-                          onClick={() => setBits(b)}
-                          className={`flex-1 relative overflow-hidden text-xs py-3 rounded-lg transition-all duration-300 font-mono border ${
-                              bits === b 
-                              ? 'bg-pac-blue/50 border-pac-ghostCyan text-pac-ghostCyan shadow-[0_0_10px_rgba(0,255,255,0.2)]' 
-                              : 'bg-gray-900 border-gray-800 text-gray-500 hover:border-gray-600'
-                          }`}
-                      >
-                          {bits === b && <div className="absolute inset-0 bg-pac-ghostCyan/10"></div>}
-                          {b}
-                      </button>
-                  ))}
-                </div>
-             </div>
-
-             {/* Format Toggle Switch */}
-             <div>
-                <label className="text-xs text-gray-400 block mb-3 font-arcade">OUTPUT FORMAT</label>
-                <div className="flex items-center gap-4 bg-gray-900 p-1.5 rounded-xl border border-gray-800 w-fit">
-                    <button
-                        onClick={() => setFormat('hex')}
-                        className={`px-4 py-2 rounded-lg text-xs font-mono transition-all duration-300 flex items-center gap-2 ${
-                            format === 'hex' 
-                            ? 'bg-pac-yellow text-black shadow-lg' 
-                            : 'text-gray-500 hover:text-white'
-                        }`}
-                    >
-                        <span className="opacity-50">0x</span> HEX
-                    </button>
-                    <button
-                        onClick={() => setFormat('base64')}
-                        className={`px-4 py-2 rounded-lg text-xs font-mono transition-all duration-300 flex items-center gap-2 ${
-                            format === 'base64' 
-                            ? 'bg-pac-ghostPink text-black shadow-lg' 
-                            : 'text-gray-500 hover:text-white'
-                        }`}
-                    >
-                        <span className="opacity-50">Aa</span> BASE64
-                    </button>
-                </div>
-             </div>
-           </div>
-        )}
-
-        {/* UUID Controls */}
-        {config.type === 'uuid' && (
-             <div className="flex flex-col items-center justify-center py-4 text-gray-500 gap-2">
-                 <div className="w-12 h-12 rounded-full bg-gray-900 flex items-center justify-center border border-gray-800">
-                     <span className="text-2xl">🆔</span>
-                 </div>
-                 <p className="text-sm">Standard UUID v4 (Cryptographically Random)</p>
-             </div>
-        )}
-
       </div>
     </div>
   );
 };
 
-// Helper Toggle Component for Password
-const Toggle = ({ label, checked, onChange }: { label: string, checked: boolean, onChange: (v: boolean) => void }) => (
-    <label className="flex items-center cursor-pointer group select-none">
-        <div className="relative">
-            <input type="checkbox" className="sr-only" checked={checked} onChange={(e) => onChange(e.target.checked)} />
-            <div className={`block w-10 h-6 rounded-full transition-colors duration-200 ease-in-out border ${checked ? 'bg-pac-blue border-pac-yellow' : 'bg-gray-800 border-gray-700'}`}></div>
-            <div className={`dot absolute left-1 top-1 w-4 h-4 rounded-full transition-transform duration-200 ease-in-out ${checked ? 'transform translate-x-4 bg-pac-yellow' : 'bg-gray-500'}`}></div>
-        </div>
-        <div className="ml-3 text-sm font-medium text-gray-400 group-hover:text-white transition-colors">
-            {label}
-        </div>
-    </label>
+// Retro Components
+const RetroToggle = ({ label, active, onClick }: { label: string, active: boolean, onClick: () => void }) => (
+    <div 
+        onClick={onClick}
+        className={`cursor-pointer flex items-center justify-between p-2 border-2 transition-all hover:bg-gray-900 ${active ? 'border-green-500 shadow-[2px_2px_0_0_rgba(34,197,94,0.5)]' : 'border-gray-800'}`}
+    >
+        <span className={`text-[10px] transition-colors ${active ? 'text-white' : 'text-gray-500'}`}>{label}</span>
+        <div className={`w-3 h-3 border-2 ${active ? 'bg-green-500 border-green-500' : 'bg-black border-gray-600'}`}></div>
+    </div>
+);
+
+const RetroSwitchOption = ({ label, active, onClick }: { label: string, active: boolean, onClick: () => void }) => (
+    <button 
+        onClick={onClick}
+        className={`flex-1 text-[10px] py-1 transition-all ${active ? 'bg-pac-ghostPink text-black font-bold' : 'text-gray-500 hover:text-white'}`}
+    >
+        {label}
+    </button>
 );

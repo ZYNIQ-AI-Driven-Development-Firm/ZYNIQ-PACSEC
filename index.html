@@ -30,6 +30,8 @@
             animation: {
               'chomp': 'chomp 0.3s infinite linear alternate',
               'dash': 'dash 1.5s ease-in-out infinite',
+              'fade-in': 'fadeIn 0.5s ease-out forwards',
+              'fade-in-up': 'fadeInUp 0.5s ease-out forwards',
             },
             keyframes: {
               chomp: {
@@ -39,6 +41,14 @@
               dash: {
                 '0%': { transform: 'translateX(-100%)' },
                 '100%': { transform: 'translateX(100%)' }
+              },
+              fadeIn: {
+                '0%': { opacity: '0' },
+                '100%': { opacity: '1' }
+              },
+              fadeInUp: {
+                '0%': { opacity: '0', transform: 'translateY(10px)' },
+                '100%': { opacity: '1', transform: 'translateY(0)' }
               }
             }
           }
@@ -65,7 +75,13 @@
         background: #F2C94C; 
       }
       .scanline {
-        background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0) 50%, rgba(0,0,0,0.1) 50%, rgba(0,0,0,0.1));
+        background: linear-gradient(
+          to bottom,
+          rgba(255, 255, 255, 0),
+          rgba(255, 255, 255, 0) 50%,
+          rgba(0, 0, 0, 0.4) 50%,
+          rgba(0, 0, 0, 0.4)
+        );
         background-size: 100% 4px;
         position: fixed;
         pointer-events: none;
@@ -73,8 +89,30 @@
         left: 0;
         right: 0;
         bottom: 0;
-        z-index: 50;
-        opacity: 0.15;
+        z-index: 9999;
+        opacity: 0.25;
+      }
+      
+      /* Glitch & Self Destruct Effects */
+      .glitch-anim {
+        animation: glitch-anim 0.3s cubic-bezier(.25, .46, .45, .94) both infinite;
+      }
+      @keyframes glitch-anim {
+        0% { transform: translate(0) }
+        20% { transform: translate(-2px, 2px) }
+        40% { transform: translate(-2px, -2px) }
+        60% { transform: translate(2px, 2px) }
+        80% { transform: translate(2px, -2px) }
+        100% { transform: translate(0) }
+      }
+
+      .crumble {
+         animation: crumble 1s forwards;
+      }
+      @keyframes crumble {
+        0% { opacity: 1; filter: blur(0px); transform: scale(1); }
+        50% { opacity: 0.5; filter: blur(2px); transform: scale(0.9) skew(10deg); }
+        100% { opacity: 0; filter: blur(10px); transform: scale(0) skew(20deg); }
       }
     </style>
   <script type="importmap">

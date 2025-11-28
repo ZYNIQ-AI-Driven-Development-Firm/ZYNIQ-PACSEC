@@ -8,31 +8,47 @@ const tools: Tool[] = [
     functionDeclarations: [
       {
         name: "configure_generator",
-        description: "Configure a secure key generator based on user request. Use this for passwords, jwt secrets, api keys, or uuids.",
+        description: "Configure a secure key generator. Use 'recipe' type for multiple keys (e.g., API key + Secret, OAuth set).",
         parameters: {
           type: Type.OBJECT,
           properties: {
             type: {
               type: Type.STRING,
-              enum: ["password", "jwt", "uuid", "apiKey"],
-              description: "The type of secret to generate."
+              enum: ["password", "jwt", "uuid", "apiKey", "recipe"],
+              description: "The type of secret(s) to generate. Use 'recipe' for multiple keys."
             },
-            length: {
-              type: Type.INTEGER,
-              description: "Length for passwords or api keys. Default 16 for passwords.",
-            },
-            bits: {
-              type: Type.INTEGER,
-              description: "Bit strength for JWT or keys (128, 256, 512). Default 256.",
-            },
-            format: {
-              type: Type.STRING,
-              enum: ["hex", "base64"],
-              description: "Format for keys.",
-            },
-            useSymbols: { type: Type.BOOLEAN, description: "Include symbols in password" },
-            useNumbers: { type: Type.BOOLEAN, description: "Include numbers in password" },
-            useUppercase: { type: Type.BOOLEAN, description: "Include uppercase in password" }
+            // Single Item Params
+            length: { type: Type.INTEGER, description: "Length for passwords/keys." },
+            bits: { type: Type.INTEGER, description: "Bit strength (128, 256, 512)." },
+            format: { type: Type.STRING, enum: ["hex", "base64"] },
+            useSymbols: { type: Type.BOOLEAN },
+            useNumbers: { type: Type.BOOLEAN },
+            useUppercase: { type: Type.BOOLEAN },
+            // Recipe Params
+            recipeItems: {
+              type: Type.ARRAY,
+              description: "List of items for 'recipe' type. E.g. [{label: 'Client ID', config: {type: 'uuid'}}, ...]",
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  label: { type: Type.STRING, description: "Name of the key (e.g., 'API Secret')" },
+                  config: {
+                    type: Type.OBJECT,
+                    properties: {
+                        type: { type: Type.STRING, enum: ["password", "jwt", "uuid", "apiKey"] },
+                        length: { type: Type.INTEGER },
+                        bits: { type: Type.INTEGER },
+                        format: { type: Type.STRING, enum: ["hex", "base64"] },
+                        useSymbols: { type: Type.BOOLEAN },
+                        useNumbers: { type: Type.BOOLEAN },
+                        useUppercase: { type: Type.BOOLEAN }
+                    },
+                    required: ["type"]
+                  }
+                },
+                required: ["label", "config"]
+              }
+            }
           },
           required: ["type"]
         }
@@ -53,11 +69,8 @@ async function generateWithRetry(model: string, contents: string, config: any, r
         });
     } catch (error: any) {
         if (retries < MAX_RETRIES) {
-             // Retry on 429 (Too Many Requests) or 5xx (Server Errors) or Network Errors (no status)
             const status = error.status;
             const isRetryable = status === 429 || (status && status >= 500) || !status;
-            
-            // Do not retry 400 (Bad Request), 401 (Unauthorized), 403 (Forbidden)
             const isAuthOrClientError = status === 400 || status === 401 || status === 403;
 
             if (isRetryable && !isAuthOrClientError) {
@@ -73,23 +86,22 @@ async function generateWithRetry(model: string, contents: string, config: any, r
 
 export const processUserRequest = async (prompt: string): Promise<{ text: string, toolCall?: SecretConfig, isError?: boolean }> => {
   try {
-    const modelId = "gemini-2.5-flash"; // Fast and capable for this task
+    const modelId = "gemini-2.5-flash";
 
     const response = await generateWithRetry(modelId, prompt, {
         tools: tools,
-        systemInstruction: `You are a cybersecurity expert assistant for a high-end security tool called Pac-Sec.
-        Your goal is to interpret the user's request and configure the correct security generator tool.
+        systemInstruction: `You are a cybersecurity expert assistant for 'Pac-Sec'.
         
         Rules:
-        1. If the user asks for a password, call configure_generator with type='password' and safe defaults (length 16+).
-        2. If the user asks for a JWT secret, signing key, or API key, call configure_generator with type='jwt' or 'apiKey'.
-        3. If the user asks for a UUID, call configure_generator with type='uuid'.
-        4. If the user greets or asks general questions, reply briefly and professionally in the character of a helpful, secure AI interface.
-        5. NEVER generate the actual secret yourself. Always delegate to the tool.
+        1. Single Key: If user asks for one thing (e.g. "password"), use type='password', 'jwt', 'apiKey', or 'uuid'.
+        2. Multi-Key (Recipe): If user asks for a set/stack (e.g. "API credentials", "OAuth setup", "Webhook signing", "App loot crate"), use type='recipe'.
+           - Populate 'recipeItems' with logical labels and configs.
+           - Example for OAuth: Item 1: 'Client ID' (uuid), Item 2: 'Client Secret' (apiKey/hex/256).
+        3. Defaults: Password length 16+, Key bits 256.
+        4. Persona: Professional, retro-arcade style. Brief text.
         `
     });
 
-    // Check for tool calls
     const candidates = response.candidates;
     if (candidates && candidates.length > 0) {
       const parts = candidates[0].content.parts;
@@ -98,27 +110,24 @@ export const processUserRequest = async (prompt: string): Promise<{ text: string
         if (part.functionCall) {
             const args = part.functionCall.args as any;
             return {
-                text: "Initializing secure generator module...",
+                text: "Configuring secure module...",
                 toolCall: args as SecretConfig
             }
         }
       }
       
-      // If no tool call, return text
       return {
-          text: parts[0].text || "I can help you generate secure keys. Try asking for a 'strong password' or 'JWT secret'.",
+          text: parts[0].text || "I can help generate keys. Try 'Generate OAuth Stack'.",
           toolCall: undefined
       };
     }
 
-    return { text: "System unclear. Please specify the key type.", toolCall: undefined };
+    return { text: "Input unclear. Specify key type.", toolCall: undefined };
 
   } catch (error: any) {
     console.error("Gemini Error:", error);
-    
     let errorMessage = "CONNECTION FAILURE. SECURE CHANNEL UNSTABLE.";
     
-    // Provide robust, user-friendly error messages based on error type
     if (error.status === 401 || error.message?.includes("API key")) {
         errorMessage = "AUTHENTICATION ERROR: INVALID API KEY CREDENTIALS.";
     } else if (error.status === 429) {
