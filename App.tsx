@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Loader } from './components/Loader';
 import { PacThinking } from './components/PacThinking';
 import { ChatMessage } from './components/ChatMessage';
+import { NewsCard } from './components/NewsCard';
 import { processUserRequest } from './services/geminiService';
 import { Message, PromptItem } from './types';
 
@@ -22,6 +23,10 @@ export const App: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
   
+  // Menu Button Animation State
+  const [isMenuExpanded, setIsMenuExpanded] = useState(true);
+  const [isInitialPhase, setIsInitialPhase] = useState(true);
+
   // Zero Knowledge Note settings
   const ttlOptions = [30000, 60000, 300000, 3600000]; // 30s, 1m, 5m, 1h
   const [selectedTTL, setSelectedTTL] = useState(60000);
@@ -35,6 +40,15 @@ export const App: React.FC = () => {
   useEffect(() => {
     scrollToBottom();
   }, [messages, isProcessing]);
+
+  // Initial Menu Button Animation
+  useEffect(() => {
+    const timer = setTimeout(() => {
+        setIsMenuExpanded(false);
+        setIsInitialPhase(false);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, []);
 
   const removeMessage = (id: string) => {
     setMessages(prev => prev.filter(m => m.id !== id));
@@ -87,9 +101,9 @@ export const App: React.FC = () => {
   };
 
   const formatTTL = (ms: number) => {
-      if (ms < 60000) return `${(ms/1000).toString().padStart(2,'0')}s`;
-      if (ms < 3600000) return `${(ms/60000).toString().padStart(2,'0')}m`;
-      return `${(ms/3600000).toString().padStart(2,'0')}h`;
+      if (ms < 60000) return `${(ms/1000).toString().padStart(2,'0')}S`;
+      if (ms < 3600000) return `${(ms/60000).toString().padStart(2,'0')}M`;
+      return `${(ms/3600000).toString().padStart(2,'0')}H`;
   };
 
   // --- MENU DATA STRUCTURE ---
@@ -174,6 +188,19 @@ export const App: React.FC = () => {
       setMessages(prev => [...prev, promptMsg]);
   };
 
+  const handleReadMoreNews = () => {
+      setHasStarted(true);
+      const newsGuideMsg: Message = {
+          id: Date.now().toString(),
+          role: 'assistant',
+          text: 'ACCESSING SECURITY ARCHIVES...\n\nPLEASE SELECT A MODULE OR SEARCH BY KEYWORD (E.G., "JWT", "API KEY").',
+          prompts: menuData,
+          expiresAt: Date.now() + selectedTTL,
+          originalTTL: selectedTTL
+      };
+      setMessages(prev => [...prev, newsGuideMsg]);
+  };
+
   if (loadingApp) {
     return <Loader onComplete={() => setLoadingApp(false)} />;
   }
@@ -209,28 +236,36 @@ export const App: React.FC = () => {
       </header>
 
       {/* Main Content Area */}
-      <main className={`flex-1 w-full max-w-4xl mx-auto p-2 transition-all duration-500 flex flex-col relative z-10 ${!hasStarted ? 'justify-center items-center min-h-screen' : 'pt-28 pb-40'}`}>
+      <main className={`flex-1 w-full max-w-4xl mx-auto p-2 transition-all duration-500 flex flex-col relative z-10 ${!hasStarted ? 'h-screen overflow-hidden pb-32' : 'pt-28 pb-40'}`}>
         
-        {/* Intro State */}
+        {/* Intro State Layout */}
         {!hasStarted && (
-           <div className="text-center animate-fade-in mb-6 flex flex-col items-center z-20 -translate-y-12">
+           <div className="flex flex-col h-full w-full justify-between px-4 pt-16 animate-fade-in relative z-20">
                
-               <div className="mb-4 border-4 border-pac-blue p-4 bg-black shadow-[8px_8px_0_0_#1e293b]">
-                   <div className="text-4xl md:text-6xl font-arcade text-pac-yellow mb-4 tracking-tighter drop-shadow-md flex items-center justify-center gap-[0.05em]">
-                       <span>PA</span>
-                       <PacChar className="mx-[0.02em]" />
-                       <span>SE</span>
-                       <PacChar className="mx-[0.02em]" />
-                   </div>
-                   <div className="text-pac-ghostRed text-xs font-arcade tracking-[0.2em] blink-effect mt-3">
-                       Infinite Secrets. Zero Nonsense.
-                   </div>
+               {/* TOP: Logo & Subtext */}
+               <div className="flex flex-col items-center">
+                    <div className="mb-4 border-4 border-pac-blue p-4 bg-black shadow-[8px_8px_0_0_#1e293b] w-full max-w-xl">
+                        <div className="text-4xl md:text-6xl font-arcade text-pac-yellow mb-4 tracking-tighter drop-shadow-md flex items-center justify-center gap-[0.05em]">
+                            <span>PA</span>
+                            <PacChar className="mx-[0.02em]" />
+                            <span>SE</span>
+                            <PacChar className="mx-[0.02em]" />
+                        </div>
+                        <div className="text-pac-ghostRed text-xs font-arcade tracking-[0.2em] blink-effect mt-3 text-center">
+                            Infinite Secrets. Zero Nonsense.
+                        </div>
+                    </div>
+                    
+                    <p className="text-pac-ghostCyan font-arcade text-[10px] max-w-md mx-auto leading-loose mt-2 text-center">
+                        NO SERVER STORAGE.<br/>
+                        100% CLIENT-SIDE ENCRYPTION.
+                    </p>
                </div>
-               
-               <p className="text-pac-ghostCyan font-arcade text-[10px] max-w-md mx-auto leading-loose mt-2">
-                   NO SERVER STORAGE.<br/>
-                   100% CLIENT-SIDE ENCRYPTION.
-               </p>
+
+               {/* BOTTOM: News Card */}
+               <div className="w-full mb-8">
+                  <NewsCard onReadMore={handleReadMoreNews} />
+               </div>
            </div>
         )}
 
@@ -261,62 +296,66 @@ export const App: React.FC = () => {
       <div className={`
         transition-all duration-700 ease-[cubic-bezier(0.25,1,0.5,1)] w-full z-50
         ${!hasStarted 
-            ? 'fixed top-1/2 left-1/2 -translate-x-1/2 translate-y-24 max-w-xl px-4' 
-            : 'fixed bottom-0 left-0 right-0 bg-[#050505] border-t-4 border-pac-blue p-3 pb-6 md:pb-6 shadow-[0_-10px_30px_rgba(0,0,0,0.8)]'
+            ? 'fixed bottom-10 left-1/2 -translate-x-1/2 max-w-xl w-full px-4' 
+            : 'fixed bottom-5 left-0 right-0 bg-[#080808] border-t-4 border-pac-blue p-4 pb-8 shadow-[0_-10px_30px_rgba(0,0,0,0.8)]'
         }
       `}>
-          <div className={`mx-auto ${!hasStarted ? 'w-full' : 'max-w-4xl flex gap-3 items-stretch'}`}>
+          <div className={`mx-auto w-full max-w-4xl flex gap-3 items-stretch h-14`}>
             
-            {/* Command Trigger (Left side when started, Inline Row when intro) */}
+            {/* Start / Menu Button (Collapsible) */}
             {!isProcessing && (
-                <div className={`${!hasStarted ? 'flex items-center justify-center gap-4 mb-4' : 'flex-shrink-0'}`}>
-                    <button
-                        type="button"
-                        onClick={handleShowMainMenu}
-                        className={`
-                            group font-arcade text-[10px] border-2 transition-all duration-100 flex items-center justify-center gap-2 uppercase tracking-wider overflow-hidden
-                            ${!hasStarted 
-                                ? 'px-6 py-2 bg-pac-yellow text-black border-white hover:translate-y-[2px] shadow-[4px_4px_0_0_white] hover:shadow-none active:translate-y-[4px] active:shadow-none' 
-                                : 'h-full px-3 bg-gray-900 text-pac-ghostCyan border-gray-700 hover:border-pac-ghostCyan hover:bg-gray-800'
-                            }
-                        `}
-                        title="Open Command List"
-                    >
-                         <span className={!hasStarted ? 'text-sm' : 'text-sm'}>{!hasStarted ? '🕹️' : '☰'}</span>
-                         {(!hasStarted || window.innerWidth > 640) && <span>{!hasStarted ? 'PROMPTS_LIST' : 'CMD'}</span>}
-                    </button>
-                    {/* Helper text only on intro */}
-                    {!hasStarted && (
-                        <div className="font-arcade text-[10px] text-pac-ghostCyan animate-pulse whitespace-nowrap pt-1">
-                            OR TYPE_YOURS_
-                        </div>
-                    )}
-                </div>
+                <button
+                    type="button"
+                    onClick={handleShowMainMenu}
+                    onMouseEnter={() => setIsMenuExpanded(true)}
+                    onMouseLeave={() => setIsMenuExpanded(false)}
+                    className={`
+                        group flex-shrink-0 font-arcade text-[10px] border-2 transition-all duration-500 ease-in-out flex items-center gap-2 uppercase tracking-wider overflow-hidden relative
+                        bg-pac-yellow text-black border-pac-yellow shadow-[4px_4px_0_0_rgba(255,255,255,0.2)] hover:shadow-[2px_2px_0_0_white] hover:translate-x-[1px] hover:translate-y-[1px]
+                        ${isMenuExpanded ? 'w-32 px-4 justify-center' : 'w-14 px-0 justify-center'}
+                        ${isInitialPhase ? 'animate-pulse' : ''}
+                    `}
+                    title="Start System"
+                >
+                     {/* Triangle Icon (Start) */}
+                     <span className="text-sm flex-shrink-0 group-hover:scale-110 transition-transform">
+                        <svg viewBox="0 0 100 100" className="w-4 h-4 fill-current">
+                            <path d="M25 20 L85 50 L25 80 Z" />
+                        </svg>
+                     </span>
+                     
+                     {/* Text Label */}
+                     <span className={`transition-opacity duration-300 font-bold whitespace-nowrap ${isMenuExpanded ? 'opacity-100' : 'opacity-0 w-0'}`}>
+                        START
+                     </span>
+                </button>
             )}
 
-            {/* Main Input Container */}
+            {/* Main Input Container - Styled as CRT Terminal */}
             <div className={`
-                flex-1 relative flex items-center bg-black border-4 transition-colors
-                ${isProcessing ? 'border-gray-800' : 'border-pac-blue focus-within:border-pac-yellow'}
-                ${!hasStarted ? 'p-2 shadow-[8px_8px_0_0_#1e293b]' : 'p-1'}
+                flex-1 relative flex items-center bg-black border-2 transition-all duration-300 group
+                ${isProcessing 
+                    ? 'border-gray-800 opacity-50' 
+                    : 'border-pac-blue shadow-[0_0_15px_rgba(30,58,138,0.3)] focus-within:border-pac-ghostCyan focus-within:shadow-[0_0_20px_rgba(34,211,238,0.4)]'
+                }
             `}>
                 
-                {/* Timer Selector (Digital Clock Style) */}
+                {/* Timer Selector - Digital Readout Style */}
                 <button 
                     onClick={cycleTTL}
-                    className={`
-                        mr-2 font-arcade text-[10px] border-r-2 border-gray-800 px-3 py-2 transition-colors flex flex-col items-center justify-center leading-tight
-                        ${selectedTTL < 60000 ? 'text-red-500' : 'text-pac-yellow'}
-                        hover:bg-gray-900 group
-                    `}
-                    title="Self-Destruct Timer"
+                    className="h-full px-3 border-r-2 border-gray-800 bg-gray-900/40 hover:bg-gray-800/80 transition-colors flex flex-col justify-center items-center group/ttl min-w-[64px]"
+                    title="Cycle Self-Destruct Timer"
                 >
-                    <span className="text-[8px] text-gray-500 mb-0.5 group-hover:text-gray-300">TTL</span>
-                    <span>{formatTTL(selectedTTL)}</span>
+                    <span className="font-arcade text-[7px] text-gray-500 mb-1 tracking-widest group-hover/ttl:text-pac-ghostCyan transition-colors">TTL</span>
+                    <span className={`font-mono text-xs font-bold tracking-wider ${selectedTTL < 60000 ? 'text-red-500 animate-pulse' : 'text-pac-yellow'}`}>
+                        {formatTTL(selectedTTL)}
+                    </span>
                 </button>
 
-                {/* Blinking Prompt Char */}
-                <span className="font-arcade text-pac-yellow text-sm animate-pulse pl-1 md:pl-2 select-none">{'>'}</span>
+                {/* Prompt Char */}
+                <span className={`font-arcade text-sm pl-3 select-none transition-colors ${isProcessing ? 'text-gray-600' : 'text-pac-ghostCyan animate-pulse'}`}>
+                    {'>'}
+                </span>
                 
                 {/* Text Input */}
                 <input
@@ -325,33 +364,41 @@ export const App: React.FC = () => {
                     onChange={(e) => setInputValue(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSendMessage(inputValue)}
                     placeholder={hasStarted ? "ENTER COMMAND..." : "INITIATE SEQUENCE..."}
-                    className="flex-1 w-full bg-transparent border-none focus:ring-0 text-white placeholder-gray-700 font-mono text-sm md:text-base p-2 tracking-wide caret-pac-yellow"
+                    className="flex-1 w-full bg-transparent border-none focus:ring-0 text-white placeholder-gray-600 font-mono text-sm md:text-base p-3 tracking-wider caret-pac-ghostCyan"
                     disabled={isProcessing}
                     autoFocus
                     spellCheck={false}
                     autoComplete="off"
                 />
 
-                {/* Enter Button (Arcade Style) */}
+                {/* Enter Button - Integrated Action */}
                 <button 
                     onClick={() => handleSendMessage(inputValue)}
                     disabled={!inputValue.trim() || isProcessing}
                     className={`
-                        ml-2 font-arcade text-[10px] px-4 py-2 border-l-2 border-gray-800 transition-all uppercase tracking-widest
+                        h-full px-5 font-arcade text-[10px] uppercase tracking-widest transition-all border-l-2 border-gray-800 flex items-center justify-center
                         ${!inputValue.trim() || isProcessing 
-                            ? 'text-gray-600 cursor-not-allowed' 
-                            : 'bg-pac-blue text-white hover:bg-pac-yellow hover:text-black hover:font-bold'
+                            ? 'text-gray-700 bg-black cursor-not-allowed' 
+                            : 'bg-pac-blue text-white hover:bg-pac-yellow hover:text-black hover:font-bold hover:shadow-[inset_0_0_10px_rgba(255,255,255,0.4)]'
                         }
                     `}
+                    title="Execute"
                 >
-                    {isProcessing ? '...' : 'ENTER'}
+                    {isProcessing ? (
+                        <span className="animate-spin">⟳</span>
+                    ) : (
+                        <>
+                            <span className="hidden md:inline">ENTER</span>
+                            <span className="md:hidden text-base">↵</span>
+                        </>
+                    )}
                 </button>
             </div>
           </div>
       </div>
 
       {/* Footer Credit */}
-      <footer className="fixed bottom-2 w-full text-center z-[60] pointer-events-auto">
+      <footer className="fixed bottom-1 w-full text-center z-[60] pointer-events-auto">
          <a 
             href="https://zyniq.solutions" 
             target="_blank" 
