@@ -1,4 +1,4 @@
-export type SecretType = 'password' | 'jwt' | 'uuid' | 'apiKey' | 'recipe';
+export type SecretType = 'password' | 'jwt' | 'uuid' | 'apiKey' | 'recipe' | 'note' | 'rsa' | 'hash';
 
 export interface SecretConfig {
   type: SecretType;
@@ -8,7 +8,7 @@ export interface SecretConfig {
   useNumbers?: boolean;
   useUppercase?: boolean;
   // JWT/Key specific
-  bits?: number; // 128, 256, 512
+  bits?: number; // 128, 256, 512, 1024, 2048, 4096
   format?: 'hex' | 'base64';
   // Recipe specific (Loot Crate)
   recipeItems?: {
@@ -26,6 +26,16 @@ export interface PromptItem {
   items?: PromptItem[]; // If type is category, it contains items
 }
 
+export interface IntegrationItem {
+  id: string;
+  name: string;
+  desc: string;
+  icon: string;
+  url: string;
+  type: 'external' | 'api';
+  status?: 'disconnected' | 'connected';
+}
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant';
@@ -36,4 +46,5 @@ export interface Message {
   expiresAt?: number; // Timestamp when message should be deleted
   originalTTL?: number; // Duration in ms
   prompts?: PromptItem[]; // List of clickable prompts/commands
+  integrations?: IntegrationItem[]; // List of connectable tools
 }

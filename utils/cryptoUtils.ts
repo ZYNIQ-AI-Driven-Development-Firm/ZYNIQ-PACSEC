@@ -45,3 +45,50 @@ export const generateSecureBase64 = (bits: number): string => {
 export const generateUUID = (): string => {
   return crypto.randomUUID();
 };
+
+// --- RSA UTILS ---
+
+const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
+    let binary = '';
+    const bytes = new Uint8Array(buffer);
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) {
+        binary += String.fromCharCode(bytes[i]);
+    }
+    return window.btoa(binary);
+};
+
+const formatPEM = (base64: string, type: 'PUBLIC' | 'PRIVATE'): string => {
+    const chunked = base64.match(/.{1,64}/g)?.join('\n');
+    return `-----BEGIN ${type} KEY-----\n${chunked}\n-----END ${type} KEY-----`;
+};
+
+export const generateRSAKeyPair = async (modulusLength: number = 2048): Promise<{ publicKey: string, privateKey: string }> => {
+    const keyPair = await window.crypto.subtle.generateKey(
+        {
+            name: "RSA-OAEP",
+            modulusLength: modulusLength,
+            publicExponent: new Uint8Array([1, 0, 1]),
+            hash: "SHA-256",
+        },
+        true,
+        ["encrypt", "decrypt"]
+    );
+
+    const exportedPublic = await window.crypto.subtle.exportKey("spki", keyPair.publicKey);
+    const exportedPrivate = await window.crypto.subtle.exportKey("pkcs8", keyPair.privateKey);
+
+    return {
+        publicKey: formatPEM(arrayBufferToBase64(exportedPublic), 'PUBLIC'),
+        privateKey: formatPEM(arrayBufferToBase64(exportedPrivate), 'PRIVATE')
+    };
+};
+
+// --- HASH UTILS ---
+
+export const generateHash = async (text: string, algorithm: 'SHA-256' | 'SHA-512'): Promise<string> => {
+    const msgBuffer = new TextEncoder().encode(text);
+    const hashBuffer = await crypto.subtle.digest(algorithm, msgBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+};

@@ -8,18 +8,18 @@ const tools: Tool[] = [
     functionDeclarations: [
       {
         name: "configure_generator",
-        description: "Configure a secure key generator. Use 'recipe' type for multiple keys (e.g., API key + Secret, OAuth set).",
+        description: "Configure a secure key generator, recipe, secure note, RSA keypair, or hash utility.",
         parameters: {
           type: Type.OBJECT,
           properties: {
             type: {
               type: Type.STRING,
-              enum: ["password", "jwt", "uuid", "apiKey", "recipe"],
-              description: "The type of secret(s) to generate. Use 'recipe' for multiple keys."
+              enum: ["password", "jwt", "uuid", "apiKey", "recipe", "note", "rsa", "hash"],
+              description: "The type of secret/tool. Use 'rsa' for SSH/Asymmetric keys. Use 'hash' for checksums."
             },
             // Single Item Params
             length: { type: Type.INTEGER, description: "Length for passwords/keys." },
-            bits: { type: Type.INTEGER, description: "Bit strength (128, 256, 512)." },
+            bits: { type: Type.INTEGER, description: "Bit strength (128, 256, 512, 2048, 4096)." },
             format: { type: Type.STRING, enum: ["hex", "base64"] },
             useSymbols: { type: Type.BOOLEAN },
             useNumbers: { type: Type.BOOLEAN },
@@ -27,18 +27,18 @@ const tools: Tool[] = [
             // Recipe Params
             recipeItems: {
               type: Type.ARRAY,
-              description: "List of items for 'recipe' type. E.g. [{label: 'Client ID', config: {type: 'uuid'}}, ...]",
+              description: "List of items for 'recipe' type.",
               items: {
                 type: Type.OBJECT,
                 properties: {
-                  label: { type: Type.STRING, description: "Name of the key (e.g., 'API Secret')" },
+                  label: { type: Type.STRING },
                   config: {
                     type: Type.OBJECT,
                     properties: {
-                        type: { type: Type.STRING, enum: ["password", "jwt", "uuid", "apiKey"] },
+                        type: { type: Type.STRING },
                         length: { type: Type.INTEGER },
                         bits: { type: Type.INTEGER },
-                        format: { type: Type.STRING, enum: ["hex", "base64"] },
+                        format: { type: Type.STRING },
                         useSymbols: { type: Type.BOOLEAN },
                         useNumbers: { type: Type.BOOLEAN },
                         useUppercase: { type: Type.BOOLEAN }
@@ -94,11 +94,15 @@ export const processUserRequest = async (prompt: string): Promise<{ text: string
         
         Rules:
         1. Single Key: If user asks for one thing (e.g. "password"), use type='password', 'jwt', 'apiKey', or 'uuid'.
-        2. Multi-Key (Recipe): If user asks for a set/stack (e.g. "API credentials", "OAuth setup", "Webhook signing", "App loot crate"), use type='recipe'.
-           - Populate 'recipeItems' with logical labels and configs.
-           - Example for OAuth: Item 1: 'Client ID' (uuid), Item 2: 'Client Secret' (apiKey/hex/256).
-        3. Defaults: Password length 16+, Key bits 256.
-        4. Persona: Professional, retro-arcade style. Brief text.
+        2. Multi-Key (Recipe): If user asks for a set/stack (e.g. "API credentials", "OAuth setup", "App loot crate"), use type='recipe'.
+           - OAuth Stack: Client ID (apiKey, 32 chars) + Client Secret (apiKey, 256 bits hex).
+           - Cloud Keys: Access Key (apiKey, 20 chars caps) + Secret Key (apiKey, 40 chars base64).
+           - Webhook: Signing Secret (jwt, 256 bits) + Verification Token (apiKey, 32 chars).
+        3. Secure Notes: If user asks to "create a note", "share a secret", "write a self-destruct message", use type='note'.
+        4. RSA Keys: If user asks for "SSH keys", "Public/Private pair", "Asymmetric keys", use type='rsa' (bits defaults to 2048).
+        5. Hashing: If user asks to "hash this", "generate checksum", "SHA-256", use type='hash'.
+        6. Defaults: Password length 16+, Key bits 256.
+        7. Persona: Professional, retro-arcade style. Brief text.
         `
     });
 
@@ -109,15 +113,21 @@ export const processUserRequest = async (prompt: string): Promise<{ text: string
       for (const part of parts) {
         if (part.functionCall) {
             const args = part.functionCall.args as any;
+            let loadingText = "Configuring secure module...";
+            if (args.type === 'note') loadingText = "Initializing Zero Knowledge Container...";
+            if (args.type === 'recipe') loadingText = "Compiling secure Loot Crate bundle...";
+            if (args.type === 'rsa') loadingText = "Forging RSA Keypair (Client-Side)...";
+            if (args.type === 'hash') loadingText = "Initializing Ghost Hash Algorithm...";
+
             return {
-                text: "Configuring secure module...",
+                text: loadingText,
                 toolCall: args as SecretConfig
             }
         }
       }
       
       return {
-          text: parts[0].text || "I can help generate keys. Try 'Generate OAuth Stack'.",
+          text: parts[0].text || "I can help generate keys. Try 'Generate RSA Pair' or 'Hash this text'.",
           toolCall: undefined
       };
     }
